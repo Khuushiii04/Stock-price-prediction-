@@ -1,0 +1,404 @@
+import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
+import seaborn as sns
+import statsmodels.api as sm
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from pandas_datareader.data import DataReader
+import warnings
+from datetime import datetime
+import yfinance as yf
+
+warnings.filterwarnings("ignore")
+
+# Set the end date to today
+end_date = datetime.now().date()
+
+# Set the start date to one year ago
+start_date = end_date.replace(year=end_date.year - 1)
+
+# Define the list of Indian stock symbols (NSE or BSE)
+stock_symbols = ["RELIANCE.NS", "TATASTEEL.NS", "HDFCBANK.NS", "INFY.NS"]
+
+# Define the corresponding company names
+company_names = ["Reliance Industries", "Tata Steel", "HDFC Bank", "Infosys"]
+
+# Create an empty DataFrame to store the stock data
+stock_data = pd.DataFrame()
+
+# Fetch and store data for each stock
+for symbol in stock_symbols:
+    stock = yf.download(symbol, start=start_date, end=end_date)
+    stock_data[symbol] = stock["Adj Close"]
+# Print the first few rows of the stock data
+print(stock_data.head())
+
+# Create an empty list to store DataFrames for each stock
+stock_dfs = []
+
+# Fetch and store data for each stock
+for symbol in stock_symbols:
+    stock = yf.Ticker(symbol)
+    stock_data = stock.history(start=start_date, end=end_date)
+    stock_data["Company"] = symbol  # Add a new column with the company's symbol
+    stock_dfs.append(stock_data)
+
+# Concatenate the DataFrames into a single DataFrame
+data = pd.concat(stock_dfs, axis=0)
+
+# Print the last few rows of the data
+print(data.tail())
+
+data.describe()
+
+# Set the style for the plot
+sns.set(style="darkgrid")
+
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(12, 6))
+
+# Plot the close prices for each company
+ax = sns.lineplot(
+    x=data.index,
+    y="Close",
+    data=data,
+    hue="Company",
+    palette="tab10"
+)
+
+# Set titles and labels
+ax.set(
+    title="Stock Close Price for Indian Companies",
+    xlabel="Date",
+    ylabel="Close Price"
+)
+
+# Display the legend outside the plot
+plt.legend(loc='center left', bbox_to_anchor=(1.0, 0.5), title='Company')
+
+# Rotate x-axis labels
+plt.xticks(rotation=45)
+
+# grid lines
+ax.grid(True)
+
+# Add a horizontal line at y=0 for reference
+plt.axhline(0, color='black', linestyle='--', linewidth=0.5)
+
+# horizontal line at y=0 for reference
+plt.axvline(end_date, color='red', linestyle='--', linewidth=0.5, label='Today')
+
+# plot
+plt.tight_layout()
+plt.show()
+
+# Create subplots
+num_companies = len(stock_dfs)
+num_cols = 2
+num_rows = int(np.ceil(num_companies / num_cols))
+
+fig, axes = plt.subplots(num_rows, num_cols, figsize=(15, 6))
+plt.subplots_adjust(top=1.25, bottom=0.8)
+
+for i, (ax, stock_df, company_name) in enumerate(zip(axes.flatten(), stock_dfs, company_names), 1):
+
+    print(stock_df.columns)
+
+    # Update the column name based on the actual column name
+    column_name = "Close"
+
+    stock_df[column_name].plot(ax=ax)
+    ax.set_ylabel("Adj Close")
+    ax.set_xlabel(None)
+    ax.set_title(f"Closing Price of {company_name}")
+
+# Hide any empty subplots
+for i in range(num_companies, num_cols * num_rows):
+    fig.delaxes(axes.flatten()[i])
+
+plt.tight_layout()
+plt.show()
+
+num_companies = len(stock_dfs)
+num_cols = 2
+num_rows = int(np.ceil(num_companies / num_cols))
+
+fig, axes = plt.subplots(num_rows, num_cols, figsize=(14, 8))
+plt.subplots_adjust(top=1.75, bottom=0.8)
+
+for i, (ax, stock_df, company_name) in enumerate(zip(axes.flatten(), stock_dfs, company_names), 1):
+    stock_df["Volume"].plot(ax=ax)
+    ax.set_ylabel("Volume")
+    ax.set_xlabel(None)
+    ax.set_title(f"Sales Volume of {company_name}")
+
+# Hide any empty subplots
+for i in range(num_companies, num_cols * num_rows):
+    fig.delaxes(axes.flatten()[i])
+
+plt.tight_layout()
+plt.show()
+
+# Define the moving averages and line colors
+moving_averages = [10, 30, 50]
+line_colors = ['b', 'g', 'r']
+
+# Create subplots
+num_companies = len(stock_dfs)
+num_cols = 2
+num_rows = int(np.ceil(num_companies / num_cols))
+fig, axes = plt.subplots(num_rows, num_cols, figsize=(15, 7))
+plt.subplots_adjust(top=1.25, bottom=0.8)
+
+for i, (ax, stock_df, company_name) in enumerate(zip(axes.flatten(), stock_dfs, company_names), 1):
+    for ma, color in zip(moving_averages, line_colors):
+        ma_col = f"MA for {ma} days"
+
+        # Check if the column name exists in the DataFrame
+        if "Close" in stock_df.columns:
+            stock_df[ma_col] = stock_df["Close"].rolling(ma).mean()
+            sns.lineplot(
+                x=stock_df.index,
+                y=stock_df[ma_col],
+                data=stock_df,
+                ax=ax,
+                label=f"{ma}-day MA",
+                color=color,
+            )
+        else:
+            print(f"Closing price data not found for {company_name}")
+
+    ax.set(
+        title=f"Moving Averages of {company_name}",
+        xlabel=None,
+        ylabel="Moving Average",
+    )
+
+# Hide any empty subplots
+for i in range(num_companies, num_cols * num_rows):
+    fig.delaxes(axes.flatten()[i])
+
+plt.tight_layout()
+plt.suptitle("Moving Averages of the Stocks")
+plt.legend()
+plt.show()
+
+# daily returns for each stock
+for stock_df in stock_dfs:
+    stock_df["Daily Return"] = stock_df["Close"].pct_change() * 100  # Calculate daily returns in percentage
+
+# subplots
+plt.figure(figsize=(14, 8))
+plt.subplots_adjust(top=1.75, bottom=0.8)
+
+for i, stock_df in enumerate(stock_dfs, 1):
+    plt.subplot(2, 2, i)
+    sns.lineplot(
+        x=stock_df.index,
+        y="Daily Return",
+        data=stock_df,
+        color='b',
+    )
+    plt.title(f"Daily Returns for {company_names[i-1]}")
+    plt.xlabel(None)
+    plt.ylabel("Daily Return")
+
+plt.suptitle("Daily Returns")
+plt.tight_layout()
+
+plt.figure(figsize=(14, 8))
+plt.subplots_adjust(top=1.75, bottom=0.8)
+
+for i, stock_df in enumerate(stock_dfs, 1):
+    plt.subplot(2, 2, i)
+    sns.histplot(
+        stock_df["Daily Return"].dropna(),
+        bins=100,
+        color='g',
+    )
+    plt.title(f"Histogram of Daily Returns for {company_names[i-1]}")
+
+plt.suptitle("Histograms of Daily Returns")
+plt.tight_layout()
+
+plt.show()
+
+# Create a DataFrame containing only the closing prices of Indian stocks
+closing_df = data.pivot(columns='Company', values='Close')
+
+# Print the closing prices DataFrame
+print(closing_df.head())
+pct_closing = closing_df.pct_change()
+pct_closing
+
+sns.jointplot(x=pct_closing["RELIANCE.NS"], y=pct_closing["TATASTEEL.NS"])
+
+
+plt.suptitle("Joint Plot for Reliance Industries and Tata Steel", y=1.02)
+
+
+plt.show()
+sns.pairplot(pct_closing, kind = "reg")
+plt.suptitle("pairplot")
+plt.tight_layout()
+sns.heatmap(pct_closing.corr(), annot=  True, cmap = "Blues")
+pct_closing = pct_closing.dropna()
+area = np.pi * 40
+
+plt.figure(figsize = (15, 7))
+plt.scatter(pct_closing.mean(), pct_closing.std(), s = area)
+plt.xlabel("Expected return")
+plt.ylabel("Risk(std)")
+
+for label, x, y in zip(
+    pct_closing.columns,
+    pct_closing.mean(),
+    pct_closing.std()
+):
+    plt.annotate(
+        label,
+        xy = (x, y),
+        xytext = (75, 75),
+        textcoords = "offset points",
+        ha = "right",
+        va = "bottom",
+        arrowprops = dict(
+            arrowstyle = '-',
+            color = 'blue',
+            connectionstyle = 'arc3,rad = -0.3'
+        )
+    )
+
+plt.tight_layout()
+
+
+stock_symbol = 'RELIANCE.NS'
+start_date = '2022-09-01'
+end_date = datetime.now()
+
+# Fetch data for Reliance using yfinance
+df = yf.download(stock_symbol, start=start_date, end=end_date)
+
+print(df)
+plt.figure(figsize=(12, 6))
+plt.plot(df.index, df['Adj Close'], label='Adj Close', color='blue')
+plt.title('Adj Close Price for Reliance Industries (RELIANCE.NS)')
+plt.xlabel('Date')
+plt.ylabel('Adj Close Price')
+plt.legend()
+plt.grid(True)
+
+plt.show()
+data = df.filter(["Close"])
+dataset = data.values
+
+training_data_len = int(
+    np.ceil(len(dataset)* 0.95)
+)
+training_data_len
+from sklearn.preprocessing import MinMaxScaler
+
+scaler = MinMaxScaler(feature_range = (0, 1))
+scaled_data = scaler.fit_transform(dataset.reshape(-1, 1))
+
+scaled_data
+
+train_data = scaled_data[0: int(training_data_len), :]
+
+x_train = []
+y_train = []
+
+for i in range(60, len(train_data)):
+    x_train.append(train_data[i-60:i, 0])
+    y_train.append(train_data[i, 0])
+"""    if i <= 61:
+        print(x_train)
+        print(y_train)
+        print()"""
+
+print(x_train[0])
+print(y_train[0])
+
+x_train, y_train = np.array(x_train), np.array(y_train)
+x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
+x_train.shape
+
+from keras.models import Sequential
+from keras.layers import LSTM, Dense, Activation
+
+model = Sequential()
+
+# First LSTM layer with 16 units
+model.add(LSTM(16, input_shape=(x_train.shape[1], 1), return_sequences=True))
+
+# Second LSTM layer with 16 units and swish activation
+model.add(LSTM(16, return_sequences=True, activation='swish'))
+
+# Third LSTM layer with 16 units, no return sequences and swish activation
+model.add(LSTM(16, return_sequences=False, activation='swish'))
+
+# Output layer with swish activation
+model.add(Dense(1, activation='swish'))
+
+# Compile the model
+model.compile(optimizer="adam", loss="mean_squared_error")
+
+# Fit the model to the data
+model.fit(x_train, y_train, batch_size=50, epochs=52)
+model.summary()
+
+test_data = scaled_data[training_data_len - 60:, :]
+
+x_test = []
+y_test = dataset[training_data_len:]
+
+for i in range(60, len(test_data)):
+    x_test.append(test_data[i-60:i, 0])
+
+print(x_test[0])
+print(y_test[0])
+
+x_test = np.array(x_test)
+x_test = np.reshape(
+    x_test,
+    (x_test.shape[0], x_test.shape[1],1)
+)
+
+pred = model.predict(x_test)
+pred = scaler.inverse_transform(pred)
+
+rmse = np.sqrt(np.mean((pred - y_test)**2))
+
+rmse
+
+train = data[:training_data_len]
+valid = data[training_data_len:]
+valid["Predictions"] = pred
+
+# Visualize the data
+plt.figure(figsize=(16,6))
+plt.title('Model')
+plt.xlabel('Date', fontsize = 18)
+plt.ylabel('Close Price ($)', fontsize = 18)
+
+plt.plot(train['Close'])
+plt.plot(valid[['Close', 'Predictions']])
+
+plt.legend(['Train', 'Val', 'Predictions'], loc = 'lower right')
+plt.show()
+
+import matplotlib.pyplot as plt
+history = model.fit(x_train, y_train, batch_size=50, epochs=52, validation_split=0.2)
+
+plt.figure(figsize=(12, 6))
+plt.plot(history.history['loss'], label='Training Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.title('Model Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+
+# It's a regression problem, typically we don't have an accuracy metric.
